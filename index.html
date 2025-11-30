@@ -48,6 +48,7 @@
             border-radius: 5px;
             background-color: #fff;
             word-wrap: break-word;
+            overflow: hidden; /* float要素を包含 */
         }
         .message-info {
             font-size: 0.8em;
@@ -125,10 +126,8 @@
         document.addEventListener('DOMContentLoaded', () => {
             currentUsername = localStorage.getItem('chatUsername');
             if (currentUsername) {
-                // ユーザー名が保存されていれば雑談ページを表示
                 showChatApp(currentUsername);
             } else {
-                // なければログイン画面を表示
                 showLoginScreen();
             }
         });
@@ -137,149 +136,5 @@
          * ログイン処理（ユーザー名保存）
          */
         function login() {
-            // デバッグ用: 関数が呼び出されたことを確認
-            // console.log("login() called"); 
-            
             const username = USERNAME_INPUT.value.trim();
-            if (username.length > 0) {
-                localStorage.setItem('chatUsername', username);
-                currentUsername = username;
-                showChatApp(username);
-            } else {
-                alert('ユーザー名を入力してください。');
-            }
-        }
-
-        /**
-         * 画面表示をログイン画面に切り替える
-         */
-        function showLoginScreen() {
-            LOGIN_SCREEN.style.display = 'block';
-            CHAT_APP.style.display = 'none';
-        }
-
-        /**
-         * 画面表示を雑談ページに切り替える
-         */
-        function showChatApp(username) {
-            document.getElementById('current-user').textContent = username;
-            LOGIN_SCREEN.style.display = 'none';
-            CHAT_APP.style.display = 'block';
-            // 雑談ページに入ったらメッセージを読み込む
-            loadMessages();
-        }
-
-        /**
-         * 外部APIを利用してIPアドレスを取得する
-         * @returns {Promise<string>} IPアドレス
-         */
-        async function getIPAddress() {
-            try {
-                // ipify APIを利用してIPアドレスを取得
-                const response = await fetch('https://api.ipify.org?format=json');
-                const data = await response.json();
-                return data.ip || '取得失敗';
-            } catch (error) {
-                // console.error("IPアドレスの取得に失敗しました:", error);
-                return '取得エラー';
-            }
-        }
-
-        /**
-         * 投稿処理（GASへのデータ送信）
-         */
-        async function submitPost() {
-            const content = POST_CONTENT.value.trim();
-            if (content.length === 0) {
-                MESSAGE_STATUS.textContent = 'メッセージを入力してください。';
-                return;
-            }
-
-            MESSAGE_STATUS.textContent = '投稿中...';
-            const postButton = document.querySelector('#chat-app button');
-            postButton.disabled = true; // 二重投稿防止
-
-            try {
-                const ip = await getIPAddress();
-                const now = new Date();
-                
-                const data = {
-                    Username: currentUsername,
-                    Content: content,
-                    IPAddress: ip,
-                    // GASのdoPostで処理しやすいよう、日本時間でフォーマット
-                    Timestamp: now.toLocaleString('ja-JP', { 
-                        year: 'numeric', month: '2-digit', day: '2-digit', 
-                        hour: '2-digit', minute: '2-digit', second: '2-digit',
-                        timeZone: 'Asia/Tokyo'
-                    })
-                };
-
-                // GASのエンドポイントへPOSTリクエスト
-                const response = await fetch(GAS_URL, {
-                    method: 'POST',
-                    mode: 'no-cors', // クロスオリジン問題回避のために設定
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    // GASのdoPostでJSONとして受け取れるよう文字列化して送信
-                    body: JSON.stringify(data)
-                });
-
-                // POST後はすぐにコンテンツをクリアしてメッセージを再読み込み
-                POST_CONTENT.value = '';
-                MESSAGE_STATUS.textContent = '投稿が完了しました！';
-                await loadMessages();
-                
-            } catch (error) {
-                // console.error('投稿エラー:', error);
-                MESSAGE_STATUS.textContent = '投稿中にエラーが発生しました。GASのURLまたはスプレッドシートIDを確認してください。';
-            } finally {
-                postButton.disabled = false;
-                // 3秒後にステータスメッセージをクリア
-                setTimeout(() => { MESSAGE_STATUS.textContent = ''; }, 3000);
-            }
-        }
-
-        /**
-         * 雑談内容の読み込み処理（GASからのデータ取得）
-         */
-        async function loadMessages() {
-            CHAT_AREA.innerHTML = '<p style="text-align: center; color: #999;">読み込み中...</p>';
-            try {
-                // GETリクエストで、GASのdoGet関数へ 'action=getMessages' パラメータを送信
-                const response = await fetch(GAS_URL + '?action=getMessages');
-                
-                // GASはJSON形式のデータを返すように設定されている
-                const messages = await response.json();
-
-                CHAT_AREA.innerHTML = ''; // 一旦表示をクリア
-                
-                if (messages.length === 0) {
-                    CHAT_AREA.innerHTML = '<p style="text-align: center; color: #999;">まだ投稿がありません。</p>';
-                    return;
-                }
-
-                // 最新の投稿が一番上に来るように配列を逆順にする
-                messages.reverse().forEach(msg => {
-                    const div = document.createElement('div');
-                    div.className = 'message';
-                    // IPアドレスとタイムスタンプを表示
-                    div.innerHTML = `
-                        <span class="message-info">${msg.Timestamp} - ${msg.Username}</span>
-                        ${msg.Content}
-                    `;
-                    CHAT_AREA.appendChild(div);
-                });
-                
-                // スクロールを一番下（最新メッセージ）に移動
-                CHAT_AREA.scrollTop = CHAT_AREA.scrollHeight;
-
-            } catch (error) {
-                // console.error('メッセージの読み込みエラー:', error);
-                CHAT_AREA.innerHTML = '<p style="text-align: center; color: red;">メッセージの読み込みに失敗しました。GASが正しく動作しているか確認してください。</p>';
-            }
-        }
-    </script>
-</body>
-</html>
+            if (
