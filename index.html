@@ -87,9 +87,235 @@
     <div id="login-screen">
         <h2>ユーザー名を入力</h2>
         <input type="text" id="username-input" placeholder="好きなユーザー名を入力してください" maxlength="20">
-        <button onclick="login()">OK</button>
+        <button id="login-button">OK</button>
         <p style="font-size: 0.8em; color: gray; margin-top: 15px;">一度入力すると、次回アクセス時までブラウザに保存されます。</p>
     </div>
 
     <div id="chat-app" style="display: none;">
-        <h1>
+        <h1>💬 雑談サイトへようこそ</h1>
+        <p>現在のユーザー名: <span id="current-user"></span></p>
+
+        <h2>投稿内容</h2>
+        <div id="chat-area">
+            <p style="text-align: center; color: #999;">Loading messages...</p>
+        </div>
+
+        <h2>新規投稿</h2>
+        <textarea id="post-content" rows="3" placeholder="ここにメッセージを入力してください（最大200文字）" maxlength="200"></textarea>
+        <button id="submit-button">投稿</button>
+        <p id="message-status" style="margin-top: 10px; color: #5c7cfa;"></p>
+    </div>
+
+    <script>
+        // ★★★ セット済みのGASのWebアプリURL ★★★
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbzx9F2SR09Tu3qfE2HwTXVUK9z9k7s2QcWg9RBSww1pJvSYGcwZ_-8a7-adWnfT8u5Bhw/exec'; 
+        // ----------------------------------------------------------------------
+        
+        // DOM要素の取得（IDを付けて、HTMLから直接イベントを消去）
+        const LOGIN_SCREEN = document.getElementById('login-screen');
+        const CHAT_APP = document.getElementById('chat-app');
+        const USERNAME_INPUT = document.getElementById('username-input');
+        const CHAT_AREA = document.getElementById('chat-area');
+        const POST_CONTENT = document.getElementById('post-content');
+        const MESSAGE_STATUS = document.getElementById('message-status');
+        const LOGIN_BUTTON = document.getElementById('login-button'); // ★IDを新設★
+        const SUBMIT_BUTTON = document.getElementById('submit-button'); // ★IDを新設★
+
+        let currentUsername = '';
+
+        /**
+         * ページの初期化時に実行される処理
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            // イベントリスナーの設定（HTMLのonclickを削除し、ここで設定）
+            LOGIN_BUTTON.addEventListener('click', login);
+            SUBMIT_BUTTON.addEventListener('click', submitPost);
+
+            // ログイン状態のチェック
+            currentUsername = localStorage.getItem('chatUsername');
+            if (currentUsername) {
+                showChatApp(currentUsername);
+            } else {
+                showLoginScreen();
+            }
+        });
+
+        /**
+         * ログイン処理（「OK」ボタンのクリックで実行される）
+         */
+        function login() {
+            // 入力値を取得し、前後の空白を除去
+            const username = USERNAME_INPUT.value.trim(); 
+            
+            if (username.length > 0) {
+                // ユーザー名を保存
+                localStorage.setItem('chatUsername', username);
+                currentUsername = username;
+                // チャット画面へ遷移
+                showChatApp(username);
+            } else {
+                // ユーザー名が未入力の場合
+                alert('ユーザー名を入力してください。');
+            }
+        }
+
+        /**
+         * 画面表示をログイン画面に切り替える
+         */
+        function showLoginScreen() {
+            LOGIN_SCREEN.style.display = 'block';
+            CHAT_APP.style.display = 'none';
+        }
+
+        /**
+         * 画面表示を雑談ページに切り替える
+         */
+        function showChatApp(username) {
+            document.getElementById('current-user').textContent = username;
+            LOGIN_SCREEN.style.display = 'none';
+            CHAT_APP.style.display = 'block';
+            loadMessages();
+        }
+
+        async function getIPAddress() {
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                return data.ip || '取得失敗';
+            } catch (error) {
+                return '取得エラー';
+            }
+        }
+
+        /**
+         * 投稿処理（GASへのデータ送信）
+         */
+        async function submitPost() {
+            const content = POST_CONTENT.value.trim();
+            if (content.length === 0) {
+                MESSAGE_STATUS.textContent = 'メッセージを入力してください。';
+                return;
+            }
+
+            MESSAGE_STATUS.textContent = '投稿中...';
+            SUBMIT_BUTTON.disabled = true;
+
+            try {
+                const ip = await getIPAddress();
+                
+                // データのキー名はスプレッドシートのヘッダー名と一致させる
+                const data = {
+                    action: 'post', 
+                    Username: currentUsername, 
+                    Content: content,         
+                    IPAddress: ip,            
+                    Timestamp: new Date().toLocaleString('ja-JP', { 
+                        year: 'numeric', month: '2-digit', day: '2-digit', 
+                        hour: '2-digit', minute: '2-digit', second: '2-digit',
+                        timeZone: 'Asia/Tokyo'
+                    })
+                };
+
+                await fetch(GAS_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', 
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                POST_CONTENT.value = '';
+                MESSAGE_STATUS.textContent = '投稿が完了しました！';
+                await loadMessages();
+                
+            } catch (error) {
+                console.error('投稿エラー:', error);
+                MESSAGE_STATUS.textContent = '投稿中にエラーが発生しました。';
+            } finally {
+                SUBMIT_BUTTON.disabled = false;
+                setTimeout(() => { MESSAGE_STATUS.textContent = ''; }, 3000);
+            }
+        }
+        
+        /**
+         * 投稿削除処理（GASにStatus更新を依頼）
+         */
+        async function deletePost(id) {
+            if (!confirm('この投稿を削除してもよろしいですか？\n（スプレッドシートには「Deleted」として残ります）')) {
+                return;
+            }
+
+            MESSAGE_STATUS.textContent = '削除処理中...';
+            
+            try {
+                const data = {
+                    action: 'delete', 
+                    ID: id 
+                };
+
+                await fetch(GAS_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', 
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                MESSAGE_STATUS.textContent = '投稿を削除しました。';
+                await loadMessages(); 
+                
+            } catch (error) {
+                console.error('削除エラー:', error);
+                MESSAGE_STATUS.textContent = '削除中にエラーが発生しました。';
+            } finally {
+                setTimeout(() => { MESSAGE_STATUS.textContent = ''; }, 3000);
+            }
+        }
+
+
+        /**
+         * 雑談内容の読み込み処理（GASからのデータ取得）
+         */
+        async function loadMessages() {
+            CHAT_AREA.innerHTML = '<p style="text-align: center; color: #999;">読み込み中...</p>';
+            try {
+                const response = await fetch(GAS_URL + '?action=getMessages');
+                const messages = await response.json();
+
+                CHAT_AREA.innerHTML = '';
+                
+                if (messages.length === 0) {
+                    CHAT_AREA.innerHTML = '<p style="text-align: center; color: #999;">まだ投稿がありません。</p>';
+                    return;
+                }
+
+                messages.reverse().forEach(msg => {
+                    const div = document.createElement('div');
+                    div.className = 'message';
+                    
+                    // IDが有効な数値か確認
+                    const postId = Number(msg.ID);
+                    
+                    div.innerHTML = `
+                        ${!isNaN(postId) && postId > 0 ? 
+                            `<button onclick="deletePost(${postId})" style="float: right; padding: 5px 10px; background-color: #ff6f61; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.8em;">削除</button>` 
+                            : ''
+                        }
+                        <span class="message-info">${msg.Timestamp} - ${msg.Username} (ID: ${msg.ID})</span>
+                        ${msg.Content}
+                    `;
+                    CHAT_AREA.appendChild(div);
+                });
+                
+                CHAT_AREA.scrollTop = CHAT_AREA.scrollHeight;
+
+            } catch (error) {
+                console.error('メッセージの読み込みエラー:', error);
+                CHAT_AREA.innerHTML = '<p style="text-align: center; color: red;">メッセージの読み込みに失敗しました。GASのデプロイやヘッダー設定を確認してください。</p>';
+            }
+        }
+    </script>
+</body>
+</html>
