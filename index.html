@@ -111,15 +111,15 @@
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbzx9F2SR09Tu3qfE2HwTXVUK9z9k7s2QcWg9RBSww1pJvSYGcwZ_-8a7-adWnfT8u5Bhw/exec'; 
         // ----------------------------------------------------------------------
         
-        // DOM要素の取得（IDを付けて、HTMLから直接イベントを消去）
+        // DOM要素の取得
         const LOGIN_SCREEN = document.getElementById('login-screen');
         const CHAT_APP = document.getElementById('chat-app');
         const USERNAME_INPUT = document.getElementById('username-input');
         const CHAT_AREA = document.getElementById('chat-area');
         const POST_CONTENT = document.getElementById('post-content');
         const MESSAGE_STATUS = document.getElementById('message-status');
-        const LOGIN_BUTTON = document.getElementById('login-button'); // ★IDを新設★
-        const SUBMIT_BUTTON = document.getElementById('submit-button'); // ★IDを新設★
+        const LOGIN_BUTTON = document.getElementById('login-button'); 
+        const SUBMIT_BUTTON = document.getElementById('submit-button'); 
 
         let currentUsername = '';
 
@@ -127,7 +127,7 @@
          * ページの初期化時に実行される処理
          */
         document.addEventListener('DOMContentLoaded', () => {
-            // イベントリスナーの設定（HTMLのonclickを削除し、ここで設定）
+            // イベントリスナーの設定
             LOGIN_BUTTON.addEventListener('click', login);
             SUBMIT_BUTTON.addEventListener('click', submitPost);
 
@@ -141,20 +141,16 @@
         });
 
         /**
-         * ログイン処理（「OK」ボタンのクリックで実行される）
+         * ログイン処理
          */
         function login() {
-            // 入力値を取得し、前後の空白を除去
             const username = USERNAME_INPUT.value.trim(); 
             
             if (username.length > 0) {
-                // ユーザー名を保存
                 localStorage.setItem('chatUsername', username);
                 currentUsername = username;
-                // チャット画面へ遷移
                 showChatApp(username);
             } else {
-                // ユーザー名が未入力の場合
                 alert('ユーザー名を入力してください。');
             }
         }
@@ -203,7 +199,6 @@
             try {
                 const ip = await getIPAddress();
                 
-                // データのキー名はスプレッドシートのヘッダー名と一致させる
                 const data = {
                     action: 'post', 
                     Username: currentUsername, 
@@ -295,11 +290,11 @@
                     const div = document.createElement('div');
                     div.className = 'message';
                     
-                    // IDが有効な数値か確認
+                    // IDを数値に変換（GASから返されるIDが数値であることを期待）
                     const postId = Number(msg.ID);
                     
                     div.innerHTML = `
-                        ${!isNaN(postId) && postId > 0 ? 
+                        ${!isNaN(postId) && postId > 0 ? // ★IDが有効な数値でのみ削除ボタンを表示★
                             `<button onclick="deletePost(${postId})" style="float: right; padding: 5px 10px; background-color: #ff6f61; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.8em;">削除</button>` 
                             : ''
                         }
